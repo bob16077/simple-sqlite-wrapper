@@ -1,8 +1,9 @@
 {
   "name": "simple-sqlite-wrapper",
   "version": "1.1.0",
-  "description": "A simple SQLite wrapper in Enmap style-but saves directly to disk, no caching required.",
+  "description": "A lightweight wrapper around better-sqlite3 for simplified database operations.",
   "main": "index.js",
+  "keywords": ["sqlite", "wrapper", "database"],
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },

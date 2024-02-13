@@ -1,6 +1,15 @@
 const Database = require('better-sqlite3');
 
+/**
+ * SQLiteWrapper class for simplified interaction with SQLite databases.
+ */
 class SQLiteWrapper {
+    /**
+     * Creates an instance of SQLiteWrapper.
+     * @param {string} dbPath - The path to the SQLite database file.
+     * @param {string} name - The name of the table.
+     * @param {Object} options - Configuration options.
+     */
     constructor(dbPath, name, options) {
         this.db = new Database(dbPath);
         this.name = name;
@@ -9,11 +18,21 @@ class SQLiteWrapper {
         this.initTable();
     };
 
+    /**
+     * Initializes the table in the database if it does not exist.
+     */
     async initTable() {
         const stmt = this.db.prepare(`CREATE TABLE IF NOT EXISTS ${this.name} (key TEXT PRIMARY KEY, value TEXT)`);
         stmt.run();
     };
 
+    /**
+     * Sets the value for a given key.
+     * @param {string} key - The key for which to set the value.
+     * @param {any} value - The value to set for the key.
+     * @param {string} dir - Optional. A dot-separated path for nested structures.
+     * @returns {Promise<void>} - A promise that resolves when the operation is complete.
+     */
     async set(key, value, dir) {
         let before = await this.get(key);
         if (before == null) before = await this.ensure(key);
@@ -35,6 +54,12 @@ class SQLiteWrapper {
         return this._set(key, value);
     };
 
+    /**
+     * Gets the value for a given key.
+     * @param {string} key - The key for which to retrieve the value.
+     * @param {string} dir - Optional. A dot-separated path for nested structures.
+     * @returns {Promise<any>} - A promise that resolves with the retrieved value.
+     */
     async get(key, dir) {
         const stmt = this.db.prepare(`SELECT value FROM ${this.name} WHERE key = ?`);
         let result = stmt.get(key);
@@ -59,11 +84,21 @@ class SQLiteWrapper {
         return result ? parseDynamic(result?.value) : null;
     };
 
+    /**
+     * Deletes a key from the database.
+     * @param {string} key - The key to delete.
+     * @returns {Promise<void>} - A promise that resolves when the operation is complete.
+     */
     async delete(key) {
         const stmt = this.db.prepare(`DELETE FROM ${this.name} WHERE key = ?`);
         stmt.run(key);
     };
 
+    /**
+     * Ensures a key with a default value if it doesn't exist.
+     * @param {string} key - The key to ensure.
+     * @returns {Promise<any>} - A promise that resolves with the ensured value.
+     */
     async ensure(key) {
         const existingValue = await this.get(key);
 
@@ -76,34 +111,64 @@ class SQLiteWrapper {
         }
     };
 
+    /**
+     * Generates a unique alphanumeric code.
+     * @returns {Promise<string>} - A promise that resolves with the generated code.
+     */
     async autonum() {
         const code = Buffer.from(`${Math.random()}`).toString('base64').slice(3,12);
         if (await this.has(code)) return await this.autonum();
         else return code;
     };
-
+    
+    /**
+     * Filters the entries based on a filter function.
+     * @param {function} filterFunction - The filter function.
+     * @returns {Promise<Object>} - A promise that resolves with the filtered entries.
+     */
     async filter(filterFunction) {
         const allEntries = await this.getAll();
         const filteredEntries = Object.entries(allEntries).filter(([key, value]) => filterFunction(value, key));
         return Object.fromEntries(filteredEntries);
     };
 
+    /**
+     * Finds the key based on a filter function.
+     * @param {function} filterFunction - The filter function.
+     * @returns {Promise<string|null>} - A promise that resolves with the found key or null.
+     */
     async findKey(filterFunction) {
         const filtered = await this.filter(filterFunction);
         return Object.keys(filtered)?.[0] || null;
     };
 
+    /**
+     * Finds the value based on a filter function.
+     * @param {function} filterFunction - The filter function.
+     * @returns {Promise<any|null>} - A promise that resolves with the found value or null.
+     */
     async find(filterFunction) {
         const filtered = await this.filter(filterFunction);
         return Object.values(filtered)?.[0] || null;
     };
 
+    /**
+     * Pushes a value into an array associated with a key.
+     * @param {string} key - The key for the array.
+     * @param {any} value - The value to push into the array.
+     * @param {string} dir - Optional. A dot-separated path for nested structures.
+     * @returns {Promise<void>} - A promise that resolves when the operation is complete.
+     */
     async push(key, value, dir) {
         let c = await this.get(key, dir) || [];
         if (!isNaN(c?.length)) c.push(value);
         await this.set(key, c, dir);
     };
 
+    /**
+     * Gets all entries in the database.
+     * @returns {Promise<Object>} - A promise that resolves with all entries.
+     */
     async getAll() {
         const stmt = this.db.prepare(`SELECT * FROM ${this.name}`);
         const results = stmt.all();
@@ -113,6 +178,10 @@ class SQLiteWrapper {
         }, {});
     };
 
+    /**
+     * Retrieves a random value from the database.
+     * @returns {Promise<any|null>} - A promise that resolves with a random value or null if the database is empty.
+     */
     async random() {
         const allEntries = await this.getAll();
         if (Object.keys(allEntries).length === 0) return null;
@@ -120,23 +189,44 @@ class SQLiteWrapper {
         return allEntries[randomKey];
     };
 
+    /**
+     * Retrieves an array of all keys in the database.
+     * @returns {Promise<Array<string>>} - A promise that resolves with an array of keys.
+     */
     async keyArray() {
         const all = await this.getAll();
         return Object.keys(all);
     };
 
+    /**
+     * Retrieves the number of entries in the database.
+     * @returns {Promise<number>} - A promise that resolves with the number of entries.
+     */
     async length() {
         const stmt = this.db.prepare(`SELECT COUNT(*) as count FROM ${this.name}`);
         const result = stmt.get();
         return result.count;
     };
 
+    /**
+     * Checks if a key exists in the database.
+     * @param {string} key - The key to check for existence.
+     * @returns {Promise<boolean>} - A promise that resolves with a boolean indicating whether the key exists.
+     */
     async has(key) {
         const stmt = this.db.prepare(`SELECT COUNT(*) as count FROM ${this.name} WHERE key = ?`);
         const result = stmt.get(key);
         return result.count > 0;
     };
 
+    /**
+     * Performs a mathematical operation on the value associated with a key.
+     * @param {string} key - The key for which to perform the mathematical operation.
+     * @param {string} operation - The mathematical operation to perform (+, -, *, /, %, ^).
+     * @param {number} operand - The operand for the mathematical operation.
+     * @param {string} path - Optional. A dot-separated path for nested structures.
+     * @returns {Promise<void>} - A promise that resolves when the operation is complete.
+     */
     async math(key, operation, operand, path = '') {
         const currentValue = await this.get(key);
         if (currentValue !== null) {
@@ -155,17 +245,36 @@ class SQLiteWrapper {
         }
     };
 
+    /**
+     * Checks if a value is included in an array associated with a key.
+     * @param {string} key - The key for the array.
+     * @param {any} value - The value to check for inclusion.
+     * @param {string} path - Optional. A dot-separated path for nested structures.
+     * @returns {Promise<boolean>} - A promise that resolves with a boolean indicating whether the value is included.
+     */
     async includes(key, value, path) {
         const v = await this.get(key, path);
         return v.length ? v.includes(value) : false;
     };
 
+    /**
+     * Increments the value associated with a key.
+     * @param {string} key - The key to increment.
+     * @param {string} dir - Optional. A dot-separated path for nested structures.
+     * @returns {Promise<void>} - A promise that resolves when the operation is complete.
+     */
     async inc(key, dir) {
         let before = await this.get(key, dir);
         before = Number(before) + 1;
         this.set(key, before, dir);
     };
 
+    /**
+     * Decrements the value associated with a key.
+     * @param {string} key - The key to decrement.
+     * @param {string} dir - Optional. A dot-separated path for nested structures.
+     * @returns {Promise<void>} - A promise that resolves when the operation is complete.
+     */
     async dec(key, dir) {
         let before = await this.get(key, dir);
         before = Number(before) - 1;
