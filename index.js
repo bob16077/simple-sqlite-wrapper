@@ -21,9 +21,9 @@ class SQLiteWrapper {
     /**
      * Initializes the table in the database if it does not exist.
      */
-    async initTable() {
-        const stmt = this.db.prepare(`CREATE TABLE IF NOT EXISTS ${this.name} (key TEXT PRIMARY KEY, value TEXT)`);
-        stmt.run();
+    initTable() {
+        this.db.pragma('journal_mode = WAL');
+        this.db.prepare(`CREATE TABLE IF NOT EXISTS ${this.name} (key TEXT PRIMARY KEY, value TEXT)`).run();
     };
 
     /**
@@ -33,9 +33,9 @@ class SQLiteWrapper {
      * @param {string} dir - Optional. A dot-separated path for nested structures.
      * @returns {Promise<void>} - A promise that resolves when the operation is complete.
      */
-    async set(key, value, dir) {
-        let before = await this.get(key);
-        if (before == null) before = await this.ensure(key);
+    set(key, value, dir) {
+        let before = this.get(key);
+        if (before == null) before = this.ensure(key);
         if (dir) {
             const keys = dir.split('.');
             const result = {};
@@ -60,9 +60,8 @@ class SQLiteWrapper {
      * @param {string} dir - Optional. A dot-separated path for nested structures.
      * @returns {Promise<any>} - A promise that resolves with the retrieved value.
      */
-    async get(key, dir) {
-        const stmt = this.db.prepare(`SELECT value FROM ${this.name} WHERE key = ?`);
-        let result = stmt.get(key);
+    get(key, dir) {
+        const result = this.db.prepare(`SELECT value FROM ${this.name} WHERE key = ?`).get(key);
 
         if (dir && result) {
             const keys = dir.split('.');
@@ -89,9 +88,8 @@ class SQLiteWrapper {
      * @param {string} key - The key to delete.
      * @returns {Promise<void>} - A promise that resolves when the operation is complete.
      */
-    async delete(key) {
-        const stmt = this.db.prepare(`DELETE FROM ${this.name} WHERE key = ?`);
-        stmt.run(key);
+    delete(key) {
+        return this.db.prepare(`DELETE FROM ${this.name} WHERE key = ?`).run(key);
     };
 
     /**
@@ -99,12 +97,11 @@ class SQLiteWrapper {
      * @param {string} key - The key to ensure.
      * @returns {Promise<any>} - A promise that resolves with the ensured value.
      */
-    async ensure(key) {
-        const existingValue = await this.get(key);
+    ensure(key) {
+        const existingValue = this.get(key);
 
         if (existingValue === null) {
-            await this._set(key, this.autoEnsure);
-            return this.autoEnsure;
+            return this._set(key, this.autoEnsure);
         } else {
             let value = mergeObjects({}, this.autoEnsure, existingValue);
             return this._set(key, value);
@@ -115,9 +112,9 @@ class SQLiteWrapper {
      * Generates a unique alphanumeric code.
      * @returns {Promise<string>} - A promise that resolves with the generated code.
      */
-    async autonum() {
+    autonum() {
         const code = Buffer.from(`${Math.random()}`).toString('base64').slice(3,12);
-        if (await this.has(code)) return await this.autonum();
+        if (this.has(code)) return this.autonum();
         else return code;
     };
     
@@ -126,8 +123,8 @@ class SQLiteWrapper {
      * @param {function} filterFunction - The filter function.
      * @returns {Promise<Object>} - A promise that resolves with the filtered entries.
      */
-    async filter(filterFunction) {
-        const allEntries = await this.getAll();
+    filter(filterFunction) {
+        const allEntries = this.getAll();
         const filteredEntries = Object.entries(allEntries).filter(([key, value]) => filterFunction(value, key));
         return Object.fromEntries(filteredEntries);
     };
@@ -137,8 +134,8 @@ class SQLiteWrapper {
      * @param {function} filterFunction - The filter function.
      * @returns {Promise<string|null>} - A promise that resolves with the found key or null.
      */
-    async findKey(filterFunction) {
-        const filtered = await this.filter(filterFunction);
+    findKey(filterFunction) {
+        const filtered = this.filter(filterFunction);
         return Object.keys(filtered)?.[0] || null;
     };
 
@@ -147,8 +144,8 @@ class SQLiteWrapper {
      * @param {function} filterFunction - The filter function.
      * @returns {Promise<any|null>} - A promise that resolves with the found value or null.
      */
-    async find(filterFunction) {
-        const filtered = await this.filter(filterFunction);
+    find(filterFunction) {
+        const filtered = this.filter(filterFunction);
         return Object.values(filtered)?.[0] || null;
     };
 
@@ -159,19 +156,18 @@ class SQLiteWrapper {
      * @param {string} dir - Optional. A dot-separated path for nested structures.
      * @returns {Promise<void>} - A promise that resolves when the operation is complete.
      */
-    async push(key, value, dir) {
-        let c = await this.get(key, dir) || [];
-        if (!isNaN(c?.length)) c.push(value);
-        await this.set(key, c, dir);
+    push(key, value, dir) {
+        let c = this.get(key, dir) || [];
+        if (typeof c == 'Array') c.push(value);
+        this._set(key, c, dir);
     };
 
     /**
      * Gets all entries in the database.
      * @returns {Promise<Object>} - A promise that resolves with all entries.
      */
-    async getAll() {
-        const stmt = this.db.prepare(`SELECT * FROM ${this.name}`);
-        const results = stmt.all();
+    getAll() {
+        const results = this.db.prepare(`SELECT * FROM ${this.name}`).all();
         return results.reduce((acc, row) => {
             acc[row.key] = JSON.parse(row.value);
             return acc;
@@ -182,8 +178,8 @@ class SQLiteWrapper {
      * Retrieves a random value from the database.
      * @returns {Promise<any|null>} - A promise that resolves with a random value or null if the database is empty.
      */
-    async random() {
-        const allEntries = await this.getAll();
+    random() {
+        const allEntries = this.getAll();
         if (Object.keys(allEntries).length === 0) return null;
         const randomKey = Object.keys(allEntries)[Math.floor(Math.random() * Object.keys(allEntries).length)];
         return allEntries[randomKey];
@@ -193,8 +189,8 @@ class SQLiteWrapper {
      * Retrieves an array of all keys in the database.
      * @returns {Promise<Array<string>>} - A promise that resolves with an array of keys.
      */
-    async keyArray() {
-        const all = await this.getAll();
+    keyArray() {
+        const all = this.getAll();
         return Object.keys(all);
     };
 
@@ -202,9 +198,8 @@ class SQLiteWrapper {
      * Retrieves the number of entries in the database.
      * @returns {Promise<number>} - A promise that resolves with the number of entries.
      */
-    async length() {
-        const stmt = this.db.prepare(`SELECT COUNT(*) as count FROM ${this.name}`);
-        const result = stmt.get();
+    length() {
+        const result = this.db.prepare(`SELECT COUNT(*) as count FROM ${this.name}`).get();
         return result.count;
     };
 
@@ -213,9 +208,8 @@ class SQLiteWrapper {
      * @param {string} key - The key to check for existence.
      * @returns {Promise<boolean>} - A promise that resolves with a boolean indicating whether the key exists.
      */
-    async has(key) {
-        const stmt = this.db.prepare(`SELECT COUNT(*) as count FROM ${this.name} WHERE key = ?`);
-        const result = stmt.get(key);
+    has(key) {
+        const result = this.db.prepare(`SELECT COUNT(*) as count FROM ${this.name} WHERE key = ?`).get(key);
         return result.count > 0;
     };
 
@@ -227,21 +221,21 @@ class SQLiteWrapper {
      * @param {string} path - Optional. A dot-separated path for nested structures.
      * @returns {Promise<void>} - A promise that resolves when the operation is complete.
      */
-    async math(key, operation, operand, path = '') {
-        const currentValue = await this.get(key);
+    math(key, operation, operand, path = '') {
+        const currentValue = this.get(key);
         if (currentValue !== null) {
             let newValue;
             if (path) {
-                const valueAtPath = await this.get(key, path);
+                const valueAtPath = this.get(key, path);
                 newValue = performMathOperation(valueAtPath, operation, operand);
-                await this.set(key, newValue, path);
+                this.set(key, newValue, path);
             } else {
                 newValue = performMathOperation(currentValue, operation, operand);
-                await this.set(key, newValue);
+                this.set(key, newValue);
             }
         } else {
             const defaultValue = performMathOperation(null, operation, operand);
-            await this.set(key, defaultValue);
+            this.set(key, defaultValue);
         }
     };
 
@@ -252,8 +246,8 @@ class SQLiteWrapper {
      * @param {string} path - Optional. A dot-separated path for nested structures.
      * @returns {Promise<boolean>} - A promise that resolves with a boolean indicating whether the value is included.
      */
-    async includes(key, value, path) {
-        const v = await this.get(key, path);
+    includes(key, value, path) {
+        const v = this.get(key, path);
         return v.length ? v.includes(value) : false;
     };
 
@@ -263,8 +257,8 @@ class SQLiteWrapper {
      * @param {string} dir - Optional. A dot-separated path for nested structures.
      * @returns {Promise<void>} - A promise that resolves when the operation is complete.
      */
-    async inc(key, dir) {
-        let before = await this.get(key, dir);
+    inc(key, dir) {
+        let before = this.get(key, dir);
         before = Number(before) + 1;
         this.set(key, before, dir);
     };
@@ -275,17 +269,13 @@ class SQLiteWrapper {
      * @param {string} dir - Optional. A dot-separated path for nested structures.
      * @returns {Promise<void>} - A promise that resolves when the operation is complete.
      */
-    async dec(key, dir) {
-        let before = await this.get(key, dir);
+    dec(key, dir) {
+        let before = this.get(key, dir);
         before = Number(before) - 1;
         this.set(key, before, dir);
     };
 
-    async _ensure(key) {
-        return await this._set(key, this.autoEnsure);
-    };
-
-    async _set(key, value) {
+    _set(key, value) {
         const stmt = this.db.prepare(`INSERT OR REPLACE INTO ${this.name} (key, value) VALUES (?, ?)`);
         const serializedValue = (value === null) ? 'null' : JSON.stringify(value);
         stmt.run(key, serializedValue);
@@ -313,8 +303,8 @@ function performMathOperation(value1, operation, value2) {
             return Math.pow(value1, value2);
         default:
             throw new Error("Invalid operation");
-    }
-}
+    };
+};
 
 function parseDynamic(value) {
     try {

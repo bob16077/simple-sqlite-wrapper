@@ -1,3 +1,5 @@
 node_modules/
 package-lock.json
 simple-sqlite-wrapper.code-workspace
+test.js
+db.sqlite
