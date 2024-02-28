@@ -1,6 +1,6 @@
 # simple-sqlite-wrapper
 
-**simple-sqlite-wrapper** is a lightweight and easy-to-use wrapper around `better-sqlite3` for simplified interaction with SQLite databases.
+**simple-sqlite-wrapper** is a lightweight, syncronous, and easy-to-use wrapper around `better-sqlite3` for simplified interaction with SQLite databases.
 
 ## Installation
 
@@ -17,10 +17,10 @@ const SQLiteWrapper = require('simple-sqlite-wrapper');
 const db = new SQLiteWrapper('path/to/database.db', 'myTable', { autoEnsure: { defaultValue: 'example' } });
 
 // Set a value for a key
-await db.set('myKey', 'myValue');
+db.set('myKey', 'myValue');
 
 // Get the value for a key
-const value = await db.get('myKey');
+const value = db.get('myKey');
 console.log(value); // Output: 'myValue'
 ```
 
@@ -34,7 +34,7 @@ Creates an instance of SQLiteWrapper.
 - `name` (string): The name of the table.
 - `options` (Object): Configuration options.
 
-### `async set(key, value, dir)`
+### `set(key, value, dir)`
 
 Sets the value for a given key.
 
@@ -42,16 +42,16 @@ Sets the value for a given key.
 - `value` (any): The value to set for the key.
 - `dir` (string): Optional. A dot-separated path for nested structures.
 
-Returns a promise that resolves when the operation is complete.
+Returns the value that has been set.
 
-### `async get(key, dir)`
+### `get(key, dir)`
 
 Gets the value for a given key.
 
 - `key` (string): The key for which to retrieve the value.
 - `dir` (string): Optional. A dot-separated path for nested structures.
 
-Returns a promise that resolves with the retrieved value.
+Returns the retrieved value.
 
 ## License
 
