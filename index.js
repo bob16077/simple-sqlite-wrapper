@@ -1,11 +1,11 @@
 const Database = require('better-sqlite3');
 
 /**
- * SQLiteWrapper class for simplified interaction with SQLite databases.
+ * simple-sqlite-wrapper class for simplified interaction with SQLite databases.
  */
 class SQLiteWrapper {
     /**
-     * Creates an instance of SQLiteWrapper.
+     * Creates an instance of simple-sqlite-wrapper.
      * @param {string} dbPath - The path to the SQLite database file.
      * @param {string} name - The name of the table.
      * @param {Object} options - Configuration options.

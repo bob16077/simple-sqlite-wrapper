@@ -14,13 +14,13 @@ npm install simple-sqlite-wrapper
 const SQLiteWrapper = require('simple-sqlite-wrapper');
 
 // Create a new instance of SQLiteWrapper
-const db = new SQLiteWrapper('path/to/database.db', 'myTable', { autoEnsure: { defaultValue: 'example' } });
+const db = new SQLiteWrapper('path/to/database.db', 'myTable');
 
 // Set a value for a key
-await db.set('myKey', 'myValue');
+db.set('myKey', 'myValue');
 
 // Get the value for a key
-const value = await db.get('myKey');
+const value = db.get('myKey');
 console.log(value); // Output: 'myValue'
 ```
 
@@ -34,7 +34,7 @@ Creates an instance of SQLiteWrapper.
 - `name` (string): The name of the table.
 - `options` (Object): Configuration options.
 
-### `async set(key, value, dir)`
+### `set(key, value, dir)`
 
 Sets the value for a given key.
 
@@ -44,7 +44,7 @@ Sets the value for a given key.
 
 Returns a promise that resolves when the operation is complete.
 
-### `async get(key, dir)`
+### `get(key, dir)`
 
 Gets the value for a given key.
 

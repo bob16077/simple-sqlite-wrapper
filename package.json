@@ -1,6 +1,6 @@
 {
   "name": "simple-sqlite-wrapper",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "description": "A lightweight wrapper around better-sqlite3 for simplified database operations.",
   "main": "index.js",
   "keywords": ["sqlite", "wrapper", "database"],
