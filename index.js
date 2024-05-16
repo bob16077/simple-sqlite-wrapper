@@ -13,10 +13,10 @@ class SQLiteWrapper {
     constructor(dbPath, name, options) {
         this.db = new Database(dbPath);
         this.name = name;
-        this.autoEnsure = (options && options.autoEnsure !== undefined) ? options.autoEnsure : null;
+        this.autoEnsure = options && options.autoEnsure !== undefined ? options.autoEnsure : null;
 
         this.initTable();
-    };
+    }
 
     /**
      * Initializes the table in the database if it does not exist.
@@ -24,7 +24,7 @@ class SQLiteWrapper {
     initTable() {
         this.db.pragma('journal_mode = WAL');
         this.db.prepare(`CREATE TABLE IF NOT EXISTS ${this.name} (key TEXT PRIMARY KEY, value TEXT)`).run();
-    };
+    }
 
     /**
      * Sets the value for a given key.
@@ -52,7 +52,7 @@ class SQLiteWrapper {
             value = mergeObjects({}, before, result);
         }
         return this._set(key, value);
-    };
+    }
 
     /**
      * Gets the value for a given key.
@@ -61,11 +61,13 @@ class SQLiteWrapper {
      * @returns {Promise<any>} - A promise that resolves with the retrieved value.
      */
     get(key, dir) {
-        const result = this.db.prepare(`SELECT value FROM ${this.name} WHERE key = ?`).get(key);
+        let result = this.db.prepare(`SELECT value FROM ${this.name} WHERE key = ?`).get(key);
+        result = result?.value;
+        if (!result) result = this.getAll()[key];
 
         if (dir && result) {
             const keys = dir.split('.');
-            let currentObj = JSON.parse(result?.value);
+            let currentObj = JSON.parse(result);
 
             for (const key of keys) {
                 if (currentObj.hasOwnProperty(key)) {
@@ -80,8 +82,8 @@ class SQLiteWrapper {
             if (typeof currentObj === 'object' || Array.isArray(currentObj)) returnable = currentObj;
             return returnable;
         }
-        return result ? parseDynamic(result?.value) : null;
-    };
+        return result ? parseDynamic(result) : null;
+    }
 
     /**
      * Deletes a key from the database.
@@ -90,7 +92,7 @@ class SQLiteWrapper {
      */
     delete(key) {
         return this.db.prepare(`DELETE FROM ${this.name} WHERE key = ?`).run(key);
-    };
+    }
 
     /**
      * Ensures a key with a default value if it doesn't exist.
@@ -106,18 +108,18 @@ class SQLiteWrapper {
             let value = mergeObjects({}, this.autoEnsure, existingValue);
             return this._set(key, value);
         }
-    };
+    }
 
     /**
      * Generates a unique alphanumeric code.
      * @returns {Promise<string>} - A promise that resolves with the generated code.
      */
     autonum() {
-        const code = Buffer.from(`${Math.random()}`).toString('base64').slice(3,12);
+        const code = Buffer.from(`${Math.random()}`).toString('base64').slice(3, 12);
         if (this.has(code)) return this.autonum();
         else return code;
-    };
-    
+    }
+
     /**
      * Filters the entries based on a filter function.
      * @param {function} filterFunction - The filter function.
@@ -127,7 +129,7 @@ class SQLiteWrapper {
         const allEntries = this.getAll();
         const filteredEntries = Object.entries(allEntries).filter(([key, value]) => filterFunction(value, key));
         return Object.fromEntries(filteredEntries);
-    };
+    }
 
     /**
      * Finds the key based on a filter function.
@@ -137,7 +139,7 @@ class SQLiteWrapper {
     findKey(filterFunction) {
         const filtered = this.filter(filterFunction);
         return Object.keys(filtered)?.[0] || null;
-    };
+    }
 
     /**
      * Finds the value based on a filter function.
@@ -147,7 +149,7 @@ class SQLiteWrapper {
     find(filterFunction) {
         const filtered = this.filter(filterFunction);
         return Object.values(filtered)?.[0] || null;
-    };
+    }
 
     /**
      * Pushes a value into an array associated with a key.
@@ -160,7 +162,7 @@ class SQLiteWrapper {
         let c = this.get(key, dir) || [];
         if (typeof c == 'Array') c.push(value);
         this._set(key, c, dir);
-    };
+    }
 
     /**
      * Gets all entries in the database.
@@ -172,7 +174,7 @@ class SQLiteWrapper {
             acc[row.key] = JSON.parse(row.value);
             return acc;
         }, {});
-    };
+    }
 
     /**
      * Retrieves a random value from the database.
@@ -183,7 +185,7 @@ class SQLiteWrapper {
         if (Object.keys(allEntries).length === 0) return null;
         const randomKey = Object.keys(allEntries)[Math.floor(Math.random() * Object.keys(allEntries).length)];
         return allEntries[randomKey];
-    };
+    }
 
     /**
      * Retrieves an array of all keys in the database.
@@ -192,7 +194,7 @@ class SQLiteWrapper {
     keyArray() {
         const all = this.getAll();
         return Object.keys(all);
-    };
+    }
 
     /**
      * Retrieves the number of entries in the database.
@@ -201,7 +203,7 @@ class SQLiteWrapper {
     length() {
         const result = this.db.prepare(`SELECT COUNT(*) as count FROM ${this.name}`).get();
         return result.count;
-    };
+    }
 
     /**
      * Checks if a key exists in the database.
@@ -211,7 +213,7 @@ class SQLiteWrapper {
     has(key) {
         const result = this.db.prepare(`SELECT COUNT(*) as count FROM ${this.name} WHERE key = ?`).get(key);
         return result.count > 0;
-    };
+    }
 
     /**
      * Performs a mathematical operation on the value associated with a key.
@@ -237,7 +239,7 @@ class SQLiteWrapper {
             const defaultValue = performMathOperation(null, operation, operand);
             this.set(key, defaultValue);
         }
-    };
+    }
 
     /**
      * Checks if a value is included in an array associated with a key.
@@ -249,7 +251,7 @@ class SQLiteWrapper {
     includes(key, value, path) {
         const v = this.get(key, path);
         return v.length ? v.includes(value) : false;
-    };
+    }
 
     /**
      * Increments the value associated with a key.
@@ -261,7 +263,7 @@ class SQLiteWrapper {
         let before = this.get(key, dir);
         before = Number(before) + 1;
         this.set(key, before, dir);
-    };
+    }
 
     /**
      * Decrements the value associated with a key.
@@ -273,14 +275,14 @@ class SQLiteWrapper {
         let before = this.get(key, dir);
         before = Number(before) - 1;
         this.set(key, before, dir);
-    };
+    }
 
     _set(key, value) {
         const stmt = this.db.prepare(`INSERT OR REPLACE INTO ${this.name} (key, value) VALUES (?, ?)`);
-        const serializedValue = (value === null) ? 'null' : JSON.stringify(value);
+        const serializedValue = value === null ? 'null' : JSON.stringify(value);
         stmt.run(key, serializedValue);
         return value;
-    };
+    }
 }
 
 module.exports = SQLiteWrapper;
@@ -295,26 +297,26 @@ function performMathOperation(value1, operation, value2) {
             return value1 * value2;
         case '/':
             if (value2 !== 0) return value1 / value2;
-            else throw new Error("Division by zero is not allowed.");
+            else throw new Error('Division by zero is not allowed.');
         case '%':
             if (value2 !== 0) return value1 % value2;
-            else throw new Error("Modulo by zero is not allowed.");
+            else throw new Error('Modulo by zero is not allowed.');
         case '^':
             return Math.pow(value1, value2);
         default:
-            throw new Error("Invalid operation");
-    };
-};
+            throw new Error('Invalid operation');
+    }
+}
 
 function parseDynamic(value) {
     try {
         const parsedJSON = JSON.parse(value);
         return parsedJSON;
-    } catch (error) {};
+    } catch (error) {}
     const parsedNumber = parseFloat(value);
     if (!isNaN(parsedNumber)) return parsedNumber;
     return value;
-};
+}
 
 function mergeObjects(...objects) {
     let merged = {};
@@ -326,6 +328,6 @@ function mergeObjects(...objects) {
                 else merged[key] = obj[key];
             }
         }
-    };
+    }
     return merged;
-};
+}

@@ -1,23 +1,27 @@
 {
-  "name": "simple-sqlite-wrapper",
-  "version": "1.2.0",
-  "description": "A lightweight wrapper around better-sqlite3 for simplified database operations.",
-  "main": "index.js",
-  "keywords": ["sqlite", "wrapper", "database"],
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/Bob16077/simple-sqlite-wrapper.git"
-  },
-  "author": "Bob16077777 Development",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/Bob16077/simple-sqlite-wrapper/issues"
-  },
-  "homepage": "https://github.com/Bob16077/simple-sqlite-wrapper#readme",
-  "dependencies": {
-    "better-sqlite3": "^9.4.1"
-  }
+    "name": "simple-sqlite-wrapper",
+    "version": "1.2.2",
+    "description": "A lightweight wrapper around better-sqlite3 for simplified database operations.",
+    "main": "index.js",
+    "keywords": [
+        "sqlite",
+        "wrapper",
+        "database"
+    ],
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/Bob16077/simple-sqlite-wrapper.git"
+    },
+    "author": "Bob16077777 Development",
+    "license": "ISC",
+    "bugs": {
+        "url": "https://github.com/Bob16077/simple-sqlite-wrapper/issues"
+    },
+    "homepage": "https://github.com/Bob16077/simple-sqlite-wrapper#readme",
+    "dependencies": {
+        "better-sqlite3": "^9.4.1"
+    }
 }
