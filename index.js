@@ -31,7 +31,7 @@ class SQLiteWrapper {
      * @param {string} key - The key for which to set the value.
      * @param {any} value - The value to set for the key.
      * @param {string} dir - Optional. A dot-separated path for nested structures.
-     * @returns {Promise<void>} - A promise that resolves when the operation is complete.
+     * @returns {any} - The value the key was set to.
      */
     set(key, value, dir) {
         let before = this.get(key);
@@ -58,7 +58,7 @@ class SQLiteWrapper {
      * Gets the value for a given key.
      * @param {string} key - The key for which to retrieve the value.
      * @param {string} dir - Optional. A dot-separated path for nested structures.
-     * @returns {Promise<any>} - A promise that resolves with the retrieved value.
+     * @returns {any} - The value of the desired key.
      */
     get(key, dir) {
         let result = this.db.prepare(`SELECT value FROM ${this.name} WHERE key = ?`).get(key);
@@ -88,7 +88,6 @@ class SQLiteWrapper {
     /**
      * Deletes a key from the database.
      * @param {string} key - The key to delete.
-     * @returns {Promise<void>} - A promise that resolves when the operation is complete.
      */
     delete(key) {
         return this.db.prepare(`DELETE FROM ${this.name} WHERE key = ?`).run(key);
@@ -97,7 +96,7 @@ class SQLiteWrapper {
     /**
      * Ensures a key with a default value if it doesn't exist.
      * @param {string} key - The key to ensure.
-     * @returns {Promise<any>} - A promise that resolves with the ensured value.
+     * @returns {any} - The current value of the key.
      */
     ensure(key) {
         const existingValue = this.get(key);
@@ -112,7 +111,7 @@ class SQLiteWrapper {
 
     /**
      * Generates a unique alphanumeric code.
-     * @returns {Promise<string>} - A promise that resolves with the generated code.
+     * @returns {String}
      */
     autonum() {
         const code = Buffer.from(`${Math.random()}`).toString('base64').slice(3, 12);
@@ -123,7 +122,7 @@ class SQLiteWrapper {
     /**
      * Filters the entries based on a filter function.
      * @param {function} filterFunction - The filter function.
-     * @returns {Promise<Object>} - A promise that resolves with the filtered entries.
+     * @returns {Object}
      */
     filter(filterFunction) {
         const allEntries = this.getAll();
@@ -134,7 +133,7 @@ class SQLiteWrapper {
     /**
      * Finds the key based on a filter function.
      * @param {function} filterFunction - The filter function.
-     * @returns {Promise<string|null>} - A promise that resolves with the found key or null.
+     * @returns {string|null}
      */
     findKey(filterFunction) {
         const filtered = this.filter(filterFunction);
@@ -144,7 +143,7 @@ class SQLiteWrapper {
     /**
      * Finds the value based on a filter function.
      * @param {function} filterFunction - The filter function.
-     * @returns {Promise<any|null>} - A promise that resolves with the found value or null.
+     * @returns {any|null}
      */
     find(filterFunction) {
         const filtered = this.filter(filterFunction);
@@ -156,7 +155,7 @@ class SQLiteWrapper {
      * @param {string} key - The key for the array.
      * @param {any} value - The value to push into the array.
      * @param {string} dir - Optional. A dot-separated path for nested structures.
-     * @returns {Promise<void>} - A promise that resolves when the operation is complete.
+     * @returns {void}
      */
     push(key, value, dir) {
         let c = this.get(key, dir) || [];
@@ -166,7 +165,7 @@ class SQLiteWrapper {
 
     /**
      * Gets all entries in the database.
-     * @returns {Promise<Object>} - A promise that resolves with all entries.
+     * @returns {Object}
      */
     getAll() {
         const results = this.db.prepare(`SELECT * FROM ${this.name}`).all();
@@ -178,7 +177,7 @@ class SQLiteWrapper {
 
     /**
      * Retrieves a random value from the database.
-     * @returns {Promise<any|null>} - A promise that resolves with a random value or null if the database is empty.
+     * @returns {any|null}
      */
     random() {
         const allEntries = this.getAll();
@@ -189,7 +188,7 @@ class SQLiteWrapper {
 
     /**
      * Retrieves an array of all keys in the database.
-     * @returns {Promise<Array<string>>} - A promise that resolves with an array of keys.
+     * @returns {Array<string>}
      */
     keyArray() {
         const all = this.getAll();
@@ -198,7 +197,7 @@ class SQLiteWrapper {
 
     /**
      * Retrieves the number of entries in the database.
-     * @returns {Promise<number>} - A promise that resolves with the number of entries.
+     * @returns {number}
      */
     length() {
         const result = this.db.prepare(`SELECT COUNT(*) as count FROM ${this.name}`).get();
@@ -208,7 +207,7 @@ class SQLiteWrapper {
     /**
      * Checks if a key exists in the database.
      * @param {string} key - The key to check for existence.
-     * @returns {Promise<boolean>} - A promise that resolves with a boolean indicating whether the key exists.
+     * @returns {boolean}
      */
     has(key) {
         const result = this.db.prepare(`SELECT COUNT(*) as count FROM ${this.name} WHERE key = ?`).get(key);
@@ -221,7 +220,7 @@ class SQLiteWrapper {
      * @param {string} operation - The mathematical operation to perform (+, -, *, /, %, ^).
      * @param {number} operand - The operand for the mathematical operation.
      * @param {string} path - Optional. A dot-separated path for nested structures.
-     * @returns {Promise<void>} - A promise that resolves when the operation is complete.
+     * @returns {void}
      */
     math(key, operation, operand, path = '') {
         const currentValue = this.get(key);
@@ -246,7 +245,7 @@ class SQLiteWrapper {
      * @param {string} key - The key for the array.
      * @param {any} value - The value to check for inclusion.
      * @param {string} path - Optional. A dot-separated path for nested structures.
-     * @returns {Promise<boolean>} - A promise that resolves with a boolean indicating whether the value is included.
+     * @returns {boolean}
      */
     includes(key, value, path) {
         const v = this.get(key, path);
@@ -257,7 +256,7 @@ class SQLiteWrapper {
      * Increments the value associated with a key.
      * @param {string} key - The key to increment.
      * @param {string} dir - Optional. A dot-separated path for nested structures.
-     * @returns {Promise<void>} - A promise that resolves when the operation is complete.
+     * @returns {void}
      */
     inc(key, dir) {
         let before = this.get(key, dir);
@@ -269,7 +268,7 @@ class SQLiteWrapper {
      * Decrements the value associated with a key.
      * @param {string} key - The key to decrement.
      * @param {string} dir - Optional. A dot-separated path for nested structures.
-     * @returns {Promise<void>} - A promise that resolves when the operation is complete.
+     * @returns {void}
      */
     dec(key, dir) {
         let before = this.get(key, dir);
@@ -278,6 +277,7 @@ class SQLiteWrapper {
     }
 
     _set(key, value) {
+        if (typeof key !== 'string') throw new Error('Key must be a string');
         const stmt = this.db.prepare(`INSERT OR REPLACE INTO ${this.name} (key, value) VALUES (?, ?)`);
         const serializedValue = value === null ? 'null' : JSON.stringify(value);
         stmt.run(key, serializedValue);
