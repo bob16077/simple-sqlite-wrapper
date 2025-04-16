@@ -1,19 +1,23 @@
-const Database = require('better-sqlite3');
+import Database, { Database as DatabaseType } from 'better-sqlite3';
 
 /**
  * simple-sqlite-wrapper class for simplified interaction with SQLite databases.
  */
-class SQLiteWrapper {
+export default class SQLiteWrapper<X> {
+    db: DatabaseType;
+    name: string;
+    autoEnsure: X | null;
+
     /**
      * Creates an instance of simple-sqlite-wrapper.
-     * @param {string} dbPath - The path to the SQLite database file.
-     * @param {string} name - The name of the table.
-     * @param {Object} options - Configuration options.
+     * @param dbPath - The path to the SQLite database file.
+     * @param name - The name of the table.
+     * @param options - Configuration options.
      */
-    constructor(dbPath, name, options) {
+    constructor(dbPath: string, name: string, options: { autoEnsure?: X } | null = null) {
         this.db = new Database(dbPath);
         this.name = name;
-        this.autoEnsure = options && options.autoEnsure !== undefined ? options.autoEnsure : null;
+        this.autoEnsure = options?.autoEnsure ?? null;
 
         this.initTable();
     }
@@ -28,17 +32,17 @@ class SQLiteWrapper {
 
     /**
      * Sets the value for a given key.
-     * @param {string} key - The key for which to set the value.
-     * @param {any} value - The value to set for the key.
-     * @param {string} dir - Optional. A dot-separated path for nested structures.
-     * @returns {any} - The value the key was set to.
+     * @param key - The key for which to set the value.
+     * @param value - The value to set for the key.
+     * @param dir - Optional. A dot-separated path for nested structures.
+     * @returns The value the key was set to.
      */
-    set(key, value, dir) {
-        let before = this.get(key);
-        if (before == null) before = this.ensure(key);
-        if (dir) {
+    set(key: string, value: any, dir?: string): any {
+        let before = this.get(key, dir);
+        if (!before) before = this.ensure(key);
+        if (dir && typeof this.autoEnsure == 'object') {
             const keys = dir.split('.');
-            const result = {};
+            const result: Record<string, any> = {};
 
             let currentLevel = result;
             keys.forEach((key, index) => {
@@ -49,19 +53,19 @@ class SQLiteWrapper {
                     currentLevel = currentLevel[key];
                 }
             });
-            value = mergeObjects({}, before, result);
+            value = mergeObjects<X>({}, before!, result as X);
         }
         return this._set(key, value);
     }
 
     /**
      * Gets the value for a given key.
-     * @param {string} key - The key for which to retrieve the value.
-     * @param {string} dir - Optional. A dot-separated path for nested structures.
-     * @returns {any} - The value of the desired key.
+     * @param key - The key for which to retrieve the value.
+     * @param dir - Optional. A dot-separated path for nested structures.
+     * @returns - The value of the desired key.
      */
-    get(key, dir) {
-        let result = this.db.prepare(`SELECT value FROM ${this.name} WHERE key = ?`).get(key);
+    get(key: string, dir?: string): X | null {
+        let result = this.db.prepare(`SELECT value FROM ${this.name} WHERE key = ?`).get(key) as any;
         result = result?.value;
         if (!result) result = this.getAll()[key];
 
@@ -73,7 +77,7 @@ class SQLiteWrapper {
                 if (currentObj.hasOwnProperty(key)) {
                     currentObj = currentObj[key];
                 } else {
-                    return undefined;
+                    return null;
                 }
             }
 
@@ -82,38 +86,41 @@ class SQLiteWrapper {
             if (typeof currentObj === 'object' || Array.isArray(currentObj)) returnable = currentObj;
             return returnable;
         }
-        return result ? parseDynamic(result) : null;
+        return result ? (parseDynamic(result) as X) : null;
     }
 
     /**
      * Deletes a key from the database.
-     * @param {string} key - The key to delete.
+     * @param key - The key to delete.
      */
-    delete(key) {
+    delete(key: string) {
         return this.db.prepare(`DELETE FROM ${this.name} WHERE key = ?`).run(key);
     }
 
     /**
      * Ensures a key with a default value if it doesn't exist.
-     * @param {string} key - The key to ensure.
-     * @returns {any} - The current value of the key.
+     * @param key - The key to ensure.
+     * @returns - The current value of the key.
      */
-    ensure(key) {
+    ensure(key: string): any {
         const existingValue = this.get(key);
 
         if (existingValue === null) {
-            return this._set(key, this.autoEnsure);
+            if (this.autoEnsure) return this._set(key, this.autoEnsure);
+            else return this._set(key, {} as X);
         } else {
-            let value = mergeObjects({}, this.autoEnsure, existingValue);
-            return this._set(key, value);
+            let value;
+            if (this.autoEnsure) {
+                value = mergeObjects<X>({}, this.autoEnsure, existingValue);
+                return this._set(key, value as X);
+            }
         }
     }
 
     /**
      * Generates a unique alphanumeric code.
-     * @returns {String}
      */
-    autonum() {
+    autonum(): string {
         const code = Buffer.from(`${Math.random()}`).toString('base64').slice(3, 12);
         if (this.has(code)) return this.autonum();
         else return code;
@@ -121,10 +128,9 @@ class SQLiteWrapper {
 
     /**
      * Filters the entries based on a filter function.
-     * @param {function} filterFunction - The filter function.
-     * @returns {Object}
+     * @param filterFunction - The filter function.
      */
-    filter(filterFunction) {
+    filter(filterFunction: Function): Record<string, X> {
         const allEntries = this.getAll();
         const filteredEntries = Object.entries(allEntries).filter(([key, value]) => filterFunction(value, key));
         return Object.fromEntries(filteredEntries);
@@ -132,151 +138,147 @@ class SQLiteWrapper {
 
     /**
      * Finds the key based on a filter function.
-     * @param {function} filterFunction - The filter function.
-     * @returns {string|null}
+     * @param filterFunction - The filter function.
      */
-    findKey(filterFunction) {
+    findKey(filterFunction: Function): string | null {
         const filtered = this.filter(filterFunction);
         return Object.keys(filtered)?.[0] || null;
     }
 
     /**
      * Finds the value based on a filter function.
-     * @param {function} filterFunction - The filter function.
-     * @returns {any|null}
+     * @param filterFunction - The filter function.
      */
-    find(filterFunction) {
+    find(filterFunction: Function): any | null {
         const filtered = this.filter(filterFunction);
         return Object.values(filtered)?.[0] || null;
     }
 
     /**
      * Pushes a value into an array associated with a key.
-     * @param {string} key - The key for the array.
-     * @param {any} value - The value to push into the array.
-     * @param {string} dir - Optional. A dot-separated path for nested structures.
-     * @returns {void}
+     * @param key - The key for the array.
+     * @param value - The value to push into the array.
+     * @param dir - Optional. A dot-separated path for nested structures.
      */
-    push(key, value, dir) {
-        let c = this.get(key, dir) || [];
-        if (typeof c == 'Array') c.push(value);
-        this._set(key, c, dir);
+    push(key: string, value: any, dir: string): void {
+        let c = (this.get(key, dir) || []) as any[];
+        if (!Array.isArray(c)) return;
+
+        c.push(value);
+        this.set(key, c, dir);
     }
 
     /**
      * Gets all entries in the database.
-     * @returns {Object}
      */
-    getAll() {
+    getAll(): Record<string, X> {
         const results = this.db.prepare(`SELECT * FROM ${this.name}`).all();
-        return results.reduce((acc, row) => {
-            acc[row.key] = JSON.parse(row.value);
+        return results.reduce((acc: Record<string, X>, row: any) => {
+            acc[row.key as string] = JSON.parse(row.value as string) as X;
             return acc;
         }, {});
     }
 
     /**
      * Retrieves a random value from the database.
-     * @returns {any|null}
      */
-    random() {
+    random(): X | null {
         const allEntries = this.getAll();
-        if (Object.keys(allEntries).length === 0) return null;
         const randomKey = Object.keys(allEntries)[Math.floor(Math.random() * Object.keys(allEntries).length)];
         return allEntries[randomKey];
     }
 
     /**
      * Retrieves an array of all keys in the database.
-     * @returns {Array<string>}
      */
-    keyArray() {
+    keyArray(): Array<string> {
         const all = this.getAll();
         return Object.keys(all);
     }
 
     /**
      * Retrieves the number of entries in the database.
-     * @returns {number}
      */
-    length() {
-        const result = this.db.prepare(`SELECT COUNT(*) as count FROM ${this.name}`).get();
+    length(): number {
+        const result = this.db.prepare(`SELECT COUNT(*) as count FROM ${this.name}`).get() as { count: number };
         return result.count;
     }
 
     /**
      * Checks if a key exists in the database.
-     * @param {string} key - The key to check for existence.
-     * @returns {boolean}
+     * @param key - The key to check for existence.
      */
-    has(key) {
-        const result = this.db.prepare(`SELECT COUNT(*) as count FROM ${this.name} WHERE key = ?`).get(key);
+    has(key: string): boolean {
+        const result = this.db.prepare(`SELECT COUNT(*) as count FROM ${this.name} WHERE key = ?`).get(key) as { count: number };
         return result.count > 0;
     }
 
     /**
      * Performs a mathematical operation on the value associated with a key.
-     * @param {string} key - The key for which to perform the mathematical operation.
-     * @param {string} operation - The mathematical operation to perform (+, -, *, /, %, ^).
-     * @param {number} operand - The operand for the mathematical operation.
-     * @param {string} path - Optional. A dot-separated path for nested structures.
-     * @returns {void}
+     * @param key - The key for which to perform the mathematical operation.
+     * @param operation - The mathematical operation to perform (+, -, *, /, %, ^).
+     * @param operand - The operand for the mathematical operation.
+     * @param path - Optional. A dot-separated path for nested structures.
      */
-    math(key, operation, operand, path = '') {
+    math(key: string, operation: '+' | '-' | '*' | '/' | '%' | '^', operand: number, path: string = ''): void {
         const currentValue = this.get(key);
-        if (currentValue !== null) {
+        if (typeof currentValue !== 'number') return;
+
+        if (!!currentValue) {
             let newValue;
             if (path) {
                 const valueAtPath = this.get(key, path);
-                newValue = performMathOperation(valueAtPath, operation, operand);
+                if (!valueAtPath) return;
+                newValue = performMathOperation(valueAtPath as X & number, operation, operand);
                 this.set(key, newValue, path);
             } else {
                 newValue = performMathOperation(currentValue, operation, operand);
                 this.set(key, newValue);
             }
         } else {
-            const defaultValue = performMathOperation(null, operation, operand);
+            const defaultValue = performMathOperation(0, operation, operand);
             this.set(key, defaultValue);
         }
     }
 
     /**
      * Checks if a value is included in an array associated with a key.
-     * @param {string} key - The key for the array.
-     * @param {any} value - The value to check for inclusion.
-     * @param {string} path - Optional. A dot-separated path for nested structures.
-     * @returns {boolean}
+     * @param key - The key for the array.
+     * @param value - The value to check for inclusion.
+     * @param path - Optional. A dot-separated path for nested structures.
      */
-    includes(key, value, path) {
+    includes(key: string, value: any, path?: string): boolean {
         const v = this.get(key, path);
+        if (!Array.isArray(v)) return false;
+
         return v.length ? v.includes(value) : false;
     }
 
     /**
      * Increments the value associated with a key.
-     * @param {string} key - The key to increment.
-     * @param {string} dir - Optional. A dot-separated path for nested structures.
-     * @returns {void}
+     * @param key - The key to increment.
+     * @param dir - Optional. A dot-separated path for nested structures.
      */
-    inc(key, dir) {
+    inc(key: string, dir: string): void {
         let before = this.get(key, dir);
-        before = Number(before) + 1;
+        if (typeof before !== 'number') return;
+        before = (Number(before) + 1) as X;
         this.set(key, before, dir);
     }
 
     /**
      * Decrements the value associated with a key.
-     * @param {string} key - The key to decrement.
-     * @param {string} dir - Optional. A dot-separated path for nested structures.
-     * @returns {void}
+     * @param key - The key to decrement.
+     * @param dir - Optional. A dot-separated path for nested structures.
      */
-    dec(key, dir) {
+    dec(key: string, dir: string): void {
         let before = this.get(key, dir);
-        before = Number(before) - 1;
+        if (typeof before !== 'number') return;
+        before = (Number(before) - 1) as X;
         this.set(key, before, dir);
     }
 
-    _set(key, value) {
+    _set(key: string, value: X) {
         if (typeof key !== 'string') throw new Error('Key must be a string');
         const stmt = this.db.prepare(`INSERT OR REPLACE INTO ${this.name} (key, value) VALUES (?, ?)`);
         const serializedValue = value === null ? 'null' : JSON.stringify(value);
@@ -285,9 +287,7 @@ class SQLiteWrapper {
     }
 }
 
-module.exports = SQLiteWrapper;
-
-function performMathOperation(value1, operation, value2) {
+function performMathOperation(value1: number, operation: '+' | '-' | '*' | '/' | '%' | '^', value2: number): number {
     switch (operation) {
         case '+':
             return value1 + value2;
@@ -303,12 +303,10 @@ function performMathOperation(value1, operation, value2) {
             else throw new Error('Modulo by zero is not allowed.');
         case '^':
             return Math.pow(value1, value2);
-        default:
-            throw new Error('Invalid operation');
     }
 }
 
-function parseDynamic(value) {
+function parseDynamic(value: any): number | string | object | null {
     try {
         const parsedJSON = JSON.parse(value);
         return parsedJSON;
@@ -318,13 +316,13 @@ function parseDynamic(value) {
     return value;
 }
 
-function mergeObjects(...objects) {
-    let merged = {};
+function mergeObjects<X>(...objects: Partial<X>[]): Partial<X> {
+    let merged: (typeof objects)[0] = {};
     for (const obj of objects) {
         for (const key in obj) {
             if (obj.hasOwnProperty(key)) {
-                if (obj[key] === null || obj[key] === undefined) merged[key] = obj[key];
-                else if (typeof obj[key] === 'object' && !Array.isArray(obj[key])) merged[key] = mergeObjects(merged[key] || {}, obj[key]);
+                if (typeof obj[key] === 'object' && !Array.isArray(obj[key]))
+                    merged[key] = mergeObjects(merged[key] ?? ({} as Partial<X>), obj[key] as Partial<X>) as X[Extract<keyof X, string>];
                 else merged[key] = obj[key];
             }
         }
