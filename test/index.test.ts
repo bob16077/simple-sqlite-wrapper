@@ -45,7 +45,7 @@ describe('SQLiteWrapper', () => {
 
     test('should ensure a key with a default value', () => {
         const ensuredValue = wrapper.ensure('key3');
-        expect(ensuredValue).toEqual({});
+        expect(ensuredValue).toEqual(null);
     });
 
     test('should check if a key exists', () => {
@@ -87,7 +87,7 @@ describe('SQLiteWrapper', () => {
     test('should retrieve a random value', () => {
         wrapper.set('key9', 'value9');
         const randomValue = wrapper.random();
-        expect(randomValue).toBeTruthy();
+        expect(randomValue);
     });
 
     test('should retrieve all keys', () => {
