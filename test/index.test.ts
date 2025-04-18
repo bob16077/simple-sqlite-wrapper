@@ -2,9 +2,8 @@ import SQLiteWrapper from '../src/index';
 import fs from 'fs';
 import path from 'path';
 
-describe('SQLiteWrapper', () => {
+describe('SQLiteWrapper Comprehensive Tests', () => {
     const dbPath = path.join(__dirname, 'test.db');
-    const tableName = 'test_table';
 
     beforeAll(() => {
         if (fs.existsSync(dbPath)) {
@@ -18,106 +17,108 @@ describe('SQLiteWrapper', () => {
         }
     });
 
-    let wrapper: SQLiteWrapper<any>;
-
-    beforeEach(() => {
-        wrapper = new SQLiteWrapper(dbPath, tableName);
-    });
-
-    test('should initialize the table', () => {
-        expect(() => {
-            new SQLiteWrapper(dbPath, tableName);
-        }).not.toThrow();
-    });
-
-    test('should set and get a value', () => {
-        wrapper.set('key1', 'value1');
-        const value = wrapper.get('key1');
+    test('set and get with nested structures', () => {
+        const wrapper = new SQLiteWrapper(dbPath, 'nested_test', { autoEnsure: {} });
+        wrapper.set('key1', 'value1', 'nested.path');
+        const value = wrapper.get('key1', 'nested.path');
         expect(value).toBe('value1');
     });
 
-    test('should delete a key', () => {
+    test('delete and ensure functionality', () => {
+        const defaultValue = { sub1: { sub11: { a: 3, b: 'hello' }, sub12: [1, 2, 3], sub13: 'hey' }, sub2: ['hi', 'there'], sub3: 5, sub4: 'welcome' };
+        const wrapper = new SQLiteWrapper(dbPath, 'delete_test', { autoEnsure: defaultValue });
+
         wrapper.set('key2', 'value2');
+        expect(wrapper.get('key2')).toBe('value2');
         wrapper.delete('key2');
-        const value = wrapper.get('key2');
-        expect(value).toBeNull();
-    });
+        expect(wrapper.get('key2')).toBeNull();
 
-    test('should ensure a key with a default value', () => {
         const ensuredValue = wrapper.ensure('key3');
-        expect(ensuredValue).toEqual(null);
+        expect(ensuredValue).toEqual(defaultValue);
+
+        wrapper.set('key3', 'newValue', 'sub1.sub11');
+        expect(wrapper.get('key3', 'sub1.sub11')).toBe('newValue');
+        expect(wrapper.get('key3', 'sub1')).toEqual({ sub11: 'newValue', sub12: [1, 2, 3], sub13: 'hey' });
+
+        expect(wrapper.get('key3', 'sub2')).toEqual(['hi', 'there']);
+        wrapper.set('key3', 'newValue2', 'sub2');
+        expect(wrapper.get('key3', 'sub2')).toBe('newValue2');
+
+        wrapper.set('key3', { new: 'value3' }, 'sub3');
+        expect(wrapper.get('key3', 'sub3')).toEqual({ new: 'value3' });
     });
 
-    test('should check if a key exists', () => {
-        wrapper.set('key4', 'value4');
-        expect(wrapper.has('key4')).toBe(true);
-        expect(wrapper.has('nonexistent')).toBe(false);
+    test('increment and decrement values', () => {
+        const wrapper = new SQLiteWrapper(dbPath, 'inc_dec_test', { autoEnsure: 0 });
+        wrapper.set('key4', 10);
+        wrapper.inc('key4', '');
+        expect(wrapper.get('key4')).toBe(11);
+
+        wrapper.dec('key4', '');
+        expect(wrapper.get('key4')).toBe(10);
     });
 
-    test('should increment and decrement a value', () => {
+    test('math operations', () => {
+        const wrapper = new SQLiteWrapper(dbPath, 'math_test');
         wrapper.set('key5', 10);
-        wrapper.inc('key5', '');
-        expect(wrapper.get('key5')).toBe(11);
+        wrapper.math('key5', '+', 5);
+        expect(wrapper.get('key5')).toBe(15);
 
-        wrapper.dec('key5', '');
-        expect(wrapper.get('key5')).toBe(10);
+        wrapper.math('key5', '*', 2);
+        expect(wrapper.get('key5')).toBe(30);
+
+        wrapper.math('key5', '/', 3);
+        expect(wrapper.get('key5')).toBeCloseTo(10);
     });
 
-    test('should perform math operations', () => {
-        wrapper.set('key6', 10);
-        wrapper.math('key6', '+', 5);
-        expect(wrapper.get('key6')).toBe(15);
+    test('array operations with push and includes', () => {
+        const wrapper = new SQLiteWrapper(dbPath, 'array_test');
+        wrapper.set('key6', []);
+        wrapper.push('key6', 'value6', '');
+        expect(wrapper.get('key6')).toEqual(['value6']);
 
-        wrapper.math('key6', '*', 2);
-        expect(wrapper.get('key6')).toBe(30);
-    });
-
-    test('should push values into an array', () => {
-        wrapper.set('key7', []);
-        wrapper.push('key7', 'value7', '');
-        expect(wrapper.get('key7')).toEqual(['value7']);
-    });
-
-    test('should retrieve all entries', () => {
-        wrapper.set('key8', 'value8');
-        const allEntries = wrapper.getAll();
-        expect(allEntries).toHaveProperty('key8', 'value8');
-    });
-
-    test('should retrieve a random value', () => {
-        wrapper.set('key9', 'value9');
-        const randomValue = wrapper.random();
-        expect(randomValue);
-    });
-
-    test('should retrieve all keys', () => {
-        wrapper.set('key10', 'value10');
-        const keys = wrapper.keyArray();
-        expect(keys).toContain('key10');
-    });
-
-    test('should filter entries', () => {
-        wrapper.set('key11', 20);
-        wrapper.set('key12', 30);
-        const filtered = wrapper.filter((value: any) => value > 25);
-        expect(filtered).toHaveProperty('key12', 30);
-    });
-
-    test('should find a key', () => {
-        wrapper.set('key13', 40);
-        const foundKey = wrapper.findKey((value: any) => value === 40);
-        expect(foundKey).toBe('key13');
-    });
-
-    test('should find a value', () => {
-        wrapper.set('key14', 50);
-        const foundValue = wrapper.find((value: any) => value === 50);
-        expect(foundValue).toBe(50);
-    });
-
-    test('should check if a value is included in an array', () => {
-        wrapper.set('key15', ['value15']);
-        const includes = wrapper.includes('key15', 'value15');
+        const includes = wrapper.has('key6');
         expect(includes).toBe(true);
+    });
+
+    test('filter, findKey, and find', () => {
+        const wrapper = new SQLiteWrapper(dbPath, 'filter_test');
+        wrapper.set('key7', 20);
+        wrapper.set('key8', 30);
+
+        const filtered = wrapper.filter((value: any) => value > 25);
+        expect(filtered).toHaveProperty('key8', 30);
+
+        const foundKey = wrapper.findKey((value: any) => value === 30);
+        expect(foundKey).toBe('key8');
+
+        const foundValue = wrapper.find((value: any) => value === 30);
+        expect(foundValue).toBe(30);
+    });
+
+    test('getAll, random, keyArray, and length', () => {
+        const wrapper = new SQLiteWrapper(dbPath, 'misc_test');
+        wrapper.set('key9', 'value9');
+        wrapper.set('key10', 'value10');
+
+        const allEntries = wrapper.getAll();
+        expect(allEntries).toHaveProperty('key9', 'value9');
+        expect(allEntries).toHaveProperty('key10', 'value10');
+
+        const randomValue = wrapper.random();
+        expect(['value9', 'value10']).toContain(randomValue);
+
+        const keys = wrapper.keyArray();
+        expect(keys).toEqual(expect.arrayContaining(['key9', 'key10']));
+
+        const length = wrapper.length();
+        expect(length).toBe(2);
+    });
+
+    test('autonum generates unique codes', () => {
+        const wrapper = new SQLiteWrapper(dbPath, 'autonum_test');
+        const code1 = wrapper.autonum();
+        const code2 = wrapper.autonum();
+        expect(code1).not.toBe(code2);
     });
 });

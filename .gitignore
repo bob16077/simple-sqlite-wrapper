@@ -2,7 +2,6 @@ node_modules/
 dist/
 package-lock.json
 simple-sqlite-wrapper.code-workspace
-test.js
 *.sqlite
 *.db-shm
 *.db-wal
