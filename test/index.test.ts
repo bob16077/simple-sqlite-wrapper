@@ -22,6 +22,9 @@ describe('SQLiteWrapper Comprehensive Tests', () => {
         wrapper.set('key1', 'value1', 'nested.path');
         const value = wrapper.get('key1', 'nested.path');
         expect(value).toBe('value1');
+
+        wrapper.set('key1', 'null', 'nested.path2');
+        expect(wrapper.get('key1', 'nested.path2')).toBe(null);
     });
 
     test('delete and ensure functionality', () => {

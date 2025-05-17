@@ -49,8 +49,7 @@ export default class SQLiteWrapper<X> {
             this._set(key, value as unknown as X);
             return value;
         } else {
-            const before = this.get(key) || this.autoEnsure;
-            if (before == null) throw new Error('autoEnsure is not set, and no default value is provided.');
+            const before = this.get(key) || this.autoEnsure || ({} as X);
 
             const keys = dir.split('.');
             const result: Record<string, any> = {};
@@ -66,8 +65,6 @@ export default class SQLiteWrapper<X> {
                     currentLevel = currentLevel[key];
                 }
             });
-            console.log(before, result);
-            console.log(mergeObjects<X>(before, result as X));
             this._set(key, mergeObjects<X>(before, result as X));
             return value;
         }
@@ -345,10 +342,10 @@ function mergeObjects<X>(o: X, ...objects: Partial<X>[]): X {
 }
 function mergeRecursive<Y>(old: Y, newValues: Partial<Y>): Y {
     for (const key in newValues) {
-        if (newValues[key]) {
+        if (Object.prototype.hasOwnProperty.call(newValues, key)) {
             if (isObject(newValues[key]) && isObject(old[key])) {
                 // if old and new are both objects, merge them recursively
-                old[key] = mergeRecursive(old[key] as Y[Extract<keyof Y, string>], newValues[key]);
+                old[key] = mergeRecursive(old[key] as Y[Extract<keyof Y, string>], newValues[key] as Y[Extract<keyof Y, string>]);
             } else {
                 // otherwise, just assign the new value
                 old = { ...old, [key]: newValues[key] };
