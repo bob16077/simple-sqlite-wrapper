@@ -1,8 +1,9 @@
 node_modules/
 dist/
 package-lock.json
-simple-sqlite-wrapper.code-workspace
+*.code-workspace
 *.sqlite
+*.db
 *.db-shm
 *.db-wal
 .DS_Store

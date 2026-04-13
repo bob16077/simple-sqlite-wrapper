@@ -1,1 +1,3 @@
 test/
+jest.config.js
+*.code-workspace

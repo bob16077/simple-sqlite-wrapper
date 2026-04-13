@@ -1,6 +1,6 @@
 # simple-sqlite-wrapper
 
-**simple-sqlite-wrapper** is a lightweight, syncronous, and easy-to-use wrapper around `better-sqlite3` for simplified interaction with SQLite databases.
+**simple-sqlite-wrapper** is a lightweight, synchronous, and easy-to-use wrapper around `better-sqlite3` for simplified interaction with SQLite databases.
 
 ## Installation
 
@@ -25,6 +25,10 @@ console.log(value); // Output: 'myValue'
 ```
 
 ## API Reference
+
+For full method-by-method documentation, setup details, and architecture notes, see:
+
+- [docs/API_AND_ARCHITECTURE.md](docs/API_AND_ARCHITECTURE.md)
 
 ### `new SQLiteWrapper(dbPath, name, options)`
 
@@ -52,6 +56,15 @@ Gets the value for a given key.
 - `dir` (string): Optional. A dot-separated path for nested structures.
 
 Returns the retrieved value.
+
+### `ensure(key, defaultValue)`
+
+Ensures a key exists by using `autoEnsure` or an explicit `defaultValue` for this call.
+
+- `key` (string): The key to ensure.
+- `defaultValue` (any): Optional fallback template used when `autoEnsure` is not configured.
+
+Returns the ensured value.
 
 ## License
 

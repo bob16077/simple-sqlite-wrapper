@@ -1,5 +1,36 @@
 import Database, { Database as DatabaseType } from 'better-sqlite3';
 
+type Primitive = string | number | boolean | bigint | symbol | null | undefined | Date;
+type Prev = [never, 0, 1, 2, 3, 4, 5];
+
+type Path<T, D extends number = 5> = [D] extends [never]
+    ? never
+    : T extends Primitive
+      ? never
+      : {
+            [K in keyof T & string]: T[K] extends Primitive
+                ? K
+                : K | `${K}.${Path<T[K], Prev[D]>}`;
+        }[keyof T & string];
+
+type PathValue<T, P extends string> = P extends `${infer K}.${infer Rest}`
+    ? K extends keyof T
+        ? PathValue<T[K], Rest>
+        : never
+    : P extends keyof T
+      ? T[P]
+      : never;
+
+type NumberPath<T> = {
+    [P in Path<T>]: PathValue<T, P> extends number ? P : never;
+}[Path<T>];
+
+type DeepPartial<T> = {
+    [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]> : T[K];
+};
+
+type SafeResult<T> = { ok: true; value: T } | { ok: false; error: Error };
+
 /**
  * simple-sqlite-wrapper class for simplified interaction with SQLite databases.
  */
@@ -18,7 +49,18 @@ export default class SQLiteWrapper<X> {
     constructor(dbPath: string, name: string, options: { autoEnsure?: X; strict?: boolean } | null = null) {
         this.db = new Database(dbPath);
         this.name = name.replace(/[^a-zA-Z0-9_]/g, '');
-        this.autoEnsure = Object.freeze(options?.autoEnsure) ?? null;
+        if (!this.name) {
+            throw new Error('Table name must include at least one alphanumeric or underscore character.');
+        }
+
+        const autoEnsure = options?.autoEnsure;
+        if (autoEnsure === undefined) {
+            this.autoEnsure = null;
+        } else if (typeof autoEnsure === 'object' && autoEnsure !== null) {
+            this.autoEnsure = Object.freeze(autoEnsure) as X;
+        } else {
+            this.autoEnsure = autoEnsure;
+        }
         this.strict = options?.strict ?? false;
 
         this.initTable();
@@ -39,7 +81,7 @@ export default class SQLiteWrapper<X> {
      * @param dir - Optional. A dot-separated path for nested structures.
      * @returns The value the key was set to.
      */
-    set<X>(key: string, value: X): X;
+    set<T>(key: string, value: T): T;
     set<T>(key: string, value: T, dir: string): T;
     set<T>(key: string, value: T, dir?: string): T {
         if (!dir) {
@@ -49,7 +91,7 @@ export default class SQLiteWrapper<X> {
             this._set(key, value as unknown as X);
             return value;
         } else {
-            const before = this.get(key) || this.autoEnsure || ({} as X);
+            const before = this.get(key) || (this.autoEnsure !== null ? cloneValue(this.autoEnsure) : ({} as X));
 
             const keys = dir.split('.');
             const result: Record<string, any> = {};
@@ -92,7 +134,7 @@ export default class SQLiteWrapper<X> {
                 let currentObj = JSON.parse(result);
 
                 for (const key of keys) {
-                    if (currentObj.hasOwnProperty(key)) {
+                    if (currentObj !== null && (typeof currentObj === 'object' || Array.isArray(currentObj)) && Object.prototype.hasOwnProperty.call(currentObj, key)) {
                         currentObj = currentObj[key];
                     } else {
                         return null;
@@ -111,6 +153,20 @@ export default class SQLiteWrapper<X> {
     }
 
     /**
+     * Typed path getter. This is additive and delegates to get(key, dir).
+     */
+    getPath<P extends Path<X>>(key: string, dir: P): PathValue<X, P> | null {
+        return this.get(key, dir as string) as PathValue<X, P> | null;
+    }
+
+    /**
+     * Typed path setter. This is additive and delegates to set(key, value, dir).
+     */
+    setPath<P extends Path<X>>(key: string, dir: P, value: PathValue<X, P>): PathValue<X, P> {
+        return this.set(key, value, dir as string) as PathValue<X, P>;
+    }
+
+    /**
      * Deletes a key from the database.
      * @param key - The key to delete.
      */
@@ -123,16 +179,35 @@ export default class SQLiteWrapper<X> {
      * @param key - The key to ensure.
      * @returns - The current value of the key.
      */
-    ensure(key: string): X {
+    ensure(key: string): X;
+
+    /**
+     * Ensures a key with a provided default value when autoEnsure is not configured.
+     * @param key - The key to ensure.
+     * @param defaultValue - A fallback template used for this ensure call.
+     * @returns - The current value of the key.
+     */
+    ensure(key: string, defaultValue: X): X;
+    ensure(key: string, defaultValue?: X): X {
         const existingValue = this.get(key);
+        const template = defaultValue !== undefined ? defaultValue : this.autoEnsure;
 
         if (existingValue === null) {
-            if (this.autoEnsure !== null) return this._set(key, this.autoEnsure);
+            if (template !== null && template !== undefined) return this._set(key, cloneValue(template));
             else throw new Error('autoEnsure is not set, and no default value is provided.');
         } else {
-            if (this.autoEnsure !== null) return this._set(key, mergeObjects<X>(this.autoEnsure, existingValue));
+            if (template !== null && template !== undefined) return this._set(key, mergeObjects<X>(cloneValue(template), existingValue));
             else return existingValue;
         }
+    }
+
+    /**
+     * Ensures a key using a deep-partial template merged onto a required base shape.
+     * This keeps typing strict while supporting partial defaults.
+     */
+    ensureDeep(key: string, partialTemplate: DeepPartial<X>, baseTemplate: X): X {
+        const fullTemplate = mergeObjects<X>(cloneValue(baseTemplate), partialTemplate as Partial<X>);
+        return this.ensure(key, fullTemplate);
     }
 
     /**
@@ -163,9 +238,39 @@ export default class SQLiteWrapper<X> {
     getAll(): Record<string, X> {
         const results = this.db.prepare(`SELECT * FROM ${this.name}`).all() as Array<{ key: string; value: string }>;
         return results.reduce((acc: Record<string, X>, row) => {
-            acc[row.key] = JSON.parse(row.value) as X;
+            acc[row.key] = parseStoredValue<X>(row.value, row.key);
             return acc;
         }, {});
+    }
+
+    /**
+     * Safely gets all entries and skips malformed rows instead of throwing.
+     * @returns Parsed entries and the list of skipped keys.
+     */
+    getAllSafe(): { entries: Record<string, X>; invalidKeys: string[] } {
+        const results = this.db.prepare(`SELECT * FROM ${this.name}`).all() as Array<{ key: string; value: string }>;
+        return results.reduce(
+            (acc, row) => {
+                try {
+                    acc.entries[row.key] = parseStoredValue<X>(row.value, row.key);
+                } catch {
+                    acc.invalidKeys.push(row.key);
+                }
+                return acc;
+            },
+            { entries: {} as Record<string, X>, invalidKeys: [] as string[] }
+        );
+    }
+
+    /**
+     * Non-throwing variant of getAll.
+     */
+    tryGetAll(): SafeResult<Record<string, X>> {
+        try {
+            return { ok: true, value: this.getAll() };
+        } catch (error) {
+            return { ok: false, error: toError(error) };
+        }
     }
 
     /**
@@ -233,7 +338,7 @@ export default class SQLiteWrapper<X> {
     inc(key: string, dir?: string): number {
         const currentValue = (dir ? this.get(key, dir) : (this.get(key) as number | null)) || 0;
         const newValue = currentValue + 1;
-        dir ? this.set(key, newValue, dir) : this.set(key, newValue);
+        dir ? this.set(key, newValue, dir) : this.set<number>(key, newValue);
         return newValue;
     }
 
@@ -245,8 +350,22 @@ export default class SQLiteWrapper<X> {
     dec(key: string, dir?: string): number {
         const currentValue = (dir ? this.get(key, dir) : (this.get(key) as number | null)) || 0;
         const newValue = currentValue - 1;
-        dir ? this.set(key, newValue) : this.set(key, newValue);
+        dir ? this.set(key, newValue, dir) : this.set<number>(key, newValue);
         return newValue;
+    }
+
+    /**
+     * Typed path increment for numeric nested paths.
+     */
+    incPath<P extends NumberPath<X>>(key: string, dir: P): number {
+        return this.inc(key, dir as string);
+    }
+
+    /**
+     * Typed path decrement for numeric nested paths.
+     */
+    decPath<P extends NumberPath<X>>(key: string, dir: P): number {
+        return this.dec(key, dir as string);
     }
 
     /**
@@ -262,8 +381,26 @@ export default class SQLiteWrapper<X> {
             throw new Error(`Key "${key}" does not exist.`);
         }
         const newValue = performMathOperation(currentValue, operation, value);
-        dir ? this.set(key, newValue, dir) : this.set(key, newValue);
+        dir ? this.set(key, newValue, dir) : this.set<number>(key, newValue);
         return newValue;
+    }
+
+    /**
+     * Typed path math operation for numeric nested paths.
+     */
+    mathPath<P extends NumberPath<X>>(key: string, dir: P, operation: '+' | '-' | '*' | '/' | '%' | '^', value: number): number {
+        return this.math(key, operation, value, dir as string);
+    }
+
+    /**
+     * Non-throwing variant of math.
+     */
+    tryMath(key: string, operation: '+' | '-' | '*' | '/' | '%' | '^', value: number, dir?: string): SafeResult<number> {
+        try {
+            return { ok: true, value: this.math(key, operation, value, dir) };
+        } catch (error) {
+            return { ok: false, error: toError(error) };
+        }
     }
 
     /**
@@ -333,26 +470,65 @@ function parseDynamic(value: any): number | string | object | null {
     return value;
 }
 
+function parseStoredValue<T>(value: string, key: string): T {
+    try {
+        return JSON.parse(value) as T;
+    } catch (error) {
+        throw new Error(`Failed to parse JSON for key "${key}".`);
+    }
+}
+
+function toError(error: unknown): Error {
+    return error instanceof Error ? error : new Error(String(error));
+}
+
 function mergeObjects<X>(o: X, ...objects: Partial<X>[]): X {
-    let out = o;
+    let out = cloneValue(o);
     for (const obj of objects) {
         out = mergeRecursive(out, obj);
     }
     return out;
 }
 function mergeRecursive<Y>(old: Y, newValues: Partial<Y>): Y {
-    for (const key in newValues) {
-        if (Object.prototype.hasOwnProperty.call(newValues, key)) {
-            if (isObject(newValues[key]) && isObject(old[key])) {
-                // if old and new are both objects, merge them recursively
-                old[key] = mergeRecursive(old[key] as Y[Extract<keyof Y, string>], newValues[key] as Y[Extract<keyof Y, string>]);
-            } else {
-                // otherwise, just assign the new value
-                old = { ...old, [key]: newValues[key] };
-            }
+    const base: Record<string, any> = isObject(old) ? { ...(old as Record<string, any>) } : {};
+    const incoming = newValues as Record<string, any>;
+
+    for (const key in incoming) {
+        if (!Object.prototype.hasOwnProperty.call(incoming, key)) continue;
+        const nextValue = incoming[key];
+        const currentValue = base[key];
+
+        if (isObject(nextValue) && isObject(currentValue)) {
+            base[key] = mergeRecursive(currentValue, nextValue);
+        } else if (isObject(nextValue)) {
+            base[key] = mergeRecursive({}, nextValue);
+        } else if (Array.isArray(nextValue)) {
+            base[key] = [...nextValue];
+        } else {
+            base[key] = nextValue;
         }
     }
-    return old;
+
+    return base as Y;
+}
+function cloneValue<T>(value: T): T {
+    if (typeof value !== 'object' || value === null) {
+        return value;
+    }
+
+    if (typeof structuredClone === 'function') {
+        return structuredClone(value);
+    }
+
+    if (Array.isArray(value)) {
+        return value.map((item) => cloneValue(item)) as T;
+    }
+
+    const cloned: Record<string, any> = {};
+    for (const [key, nestedValue] of Object.entries(value as Record<string, any>)) {
+        cloned[key] = cloneValue(nestedValue);
+    }
+    return cloned as T;
 }
 function isObject(obj: any): boolean {
     return obj !== null && typeof obj === 'object' && !Array.isArray(obj);
